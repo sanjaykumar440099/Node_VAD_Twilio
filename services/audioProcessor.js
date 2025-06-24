@@ -22,7 +22,7 @@ class AudioProcessor {
     this.audioBuffer = [];
     this.isRecording = false;
     this.silenceCounter = 0;
-    this.silenceThreshold = 30;
+    this.silenceThreshold = 50;
 
     this.sentenceBuffer = '';
     this.ttsQueue = [];
@@ -37,9 +37,11 @@ class AudioProcessor {
       ttsAudioReceived: 0,
       audioPlayback: 0,
     };
+    this.isProcessingQuery = false;
   }
 
  async processAudio(audioData) {
+  if (this.isProcessingQuery) return;
     try {
       const pcmData = this.mulawToPcm(audioData);
       const hasVoice = this.vadDetector.detect(pcmData);
@@ -89,6 +91,7 @@ class AudioProcessor {
         let lastToken = '';
         let CountToken = 0;
 
+        this.ttsService.removeAllListeners('token');
         this.ragService.on('token', token => {
           const TokenCount = CountToken++;
           if (TokenCount === 1) {
@@ -161,17 +164,26 @@ async playAudioViaMessage(base64PCM) {
   try {
     const now = Date.now();
     const playbackDelay = (now - this.timings.ttsAudioReceived).toFixed(2);
-    const totalDelay = (now - this.timings.silenceDetected).toFixed(2); // ⏱️ Total processing time
-    console.log(`${timestamp()} 🕒 ⏱️ Time from silence Detected to First playback: ${totalDelay} ms`); // <-- key log
+    const totalDelay = (now - this.timings.silenceDetected).toFixed(2);
+    console.log(`${timestamp()} 🕒 Time from silence to playback: ${totalDelay} ms`);
+
+    // Calculate chunk duration
+    const chunkDuration = base64PCM.length / 16000 / 2 * 1000;
+
     this.ws.send(JSON.stringify({
       event: 'media',
       streamSid: this.streamSid,
       media: { payload: base64PCM },
     }));
-
     console.log(`${timestamp()} 🔊 Audio sent to Twilio (Playback delay: ${playbackDelay} ms)`);
    
-    this.sentenceBuffer = '';
+    // Wait for playback to complete before resuming
+    await new Promise(resolve => setTimeout(resolve, chunkDuration + 200));
+
+    // 👇 Resume listening only after all audio chunks
+     this.isProcessingQuery = false;
+  console.log(`=======================================================================================================================`);
+
   } catch (error) {
     console.error(`${timestamp()} ❌ Playback failed:`, error);
   }

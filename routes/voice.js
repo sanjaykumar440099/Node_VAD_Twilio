@@ -6,7 +6,7 @@ const router = express.Router();
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
 // Handle incoming calls
-router.post('/incoming-call', (req, res) => {
+router.post('/voice/incoming-call', (req, res) => {
   const twiml = new VoiceResponse();
   // Greet the user
   twiml.say({voice: 'alice',language: 'en-US'}, 'Please ask me anything.');
@@ -31,7 +31,7 @@ router.post('/call', async (req, res) => {
       return res.status(400).json({ error: 'Phone number is required' });
     }
     const call = await twilioClient.calls.create({
-      url: `${process.env.NGROK_URL}/incoming-call`,
+      url: `${process.env.NGROK_URL}/voice/incoming-call`,
       to: to,
       from: process.env.TWILIO_PHONE_NUMBER
     });
