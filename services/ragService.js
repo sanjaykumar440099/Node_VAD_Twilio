@@ -9,7 +9,7 @@ class RAGService extends EventEmitter {
 
   getResponse(query) {
     const ws = new WebSocket(this.wsUrl);
-    const payload = { question: query, email: 'xyz@gmail.com' };
+    const payload = { prompt: query };
 
     ws.on('open', () => {
       ws.send(JSON.stringify(payload));

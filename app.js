@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const voiceRoutes = require('./routes/voice');
 const AudioProcessor = require('./services/audioProcessor');
+const sessionManager = require('./services/sessionManager');
 
 const app = express();
 const server = require('http').createServer(app);
@@ -55,17 +56,16 @@ wss.on('connection', (ws) => {
           
           // Initialize audio processor for this call
           audioProcessor = new AudioProcessor(callSid, ws, streamSid);
-          global.activeSessions.set(callSid, {
-            ws: ws,
-            processor: audioProcessor,
-            isProcessing: false
-          });
+           // Use session manager
+          sessionManager.createSession(callSid, streamSid, ws, audioProcessor);
+          global.activeSessions.set(callSid, { ws: ws, processor: audioProcessor, isProcessing: false});
           break;
           
         case 'media':
-          if (audioProcessor && !global.activeSessions.get(callSid)?.isProcessing) {
+          const session = sessionManager.getSession(callSid);
+          if (session && audioProcessor && !global.activeSessions.get(callSid)?.isProcessing) {
             const audioData = Buffer.from(data.media.payload, 'base64');
-            await audioProcessor.processAudio(audioData);
+            await audioProcessor.processAudio(audioData, data.media.payload);
           }
           break;
           
@@ -74,6 +74,7 @@ wss.on('connection', (ws) => {
           if (audioProcessor) {
             audioProcessor.cleanup();
           }
+          sessionManager.deleteSession(callSid);
           global.activeSessions.delete(callSid);
           break;
       }
@@ -86,6 +87,9 @@ wss.on('connection', (ws) => {
     console.log('WebSocket connection closed');
     if (callSid) {
       global.activeSessions.delete(callSid);
+      if (callSid) {
+          sessionManager.deleteSession(callSid);
+      }
     }
   });
 });
@@ -95,3 +99,5 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Ngrok URL: ${process.env.NGROK_URL}`);
 });
+
+sessionManager.startAutoCleanup();
